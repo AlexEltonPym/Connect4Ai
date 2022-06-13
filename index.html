@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Connect4</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.5.11/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.5.11/addons/p5.dom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.5.11/addons/p5.sound.min.js"></script>
+
+<style>
+html{
+  margin:0;
+  padding:0;
+  background-color: black;
+}
+
+
+</style>
+  </head>
+  <body>
+    <script>
+
+  </script>
+    <script>
+    var playing = false;
+    const boardWidth = 7;
+    const boardHeight = 6;
+
+    //design
+    var R;
+    var margin;
+    var topOffset;
+    var dropPos = 0;
+    var red, yellow, redSoft, yellowSoft;
+
+    var canvas;
+    const padding = 2;
+
+    var gameWidth, gameHeight;
+
+    var lastClick = 0;
+    var cooldown = 500;
+
+    var multiplayer = false; //player vs computer
+    //todo: ai vs ai
+    var player;
+    var humanPlayer = 1; //player starts as red
+
+    var realBoard;
+    var maxDepth = 7;
+    var bestPlay = 3;
+
+    var aiDone = true;
+
+    var gameOver = false;
+    var winner = 0;
+
+    var buttons = [];
+
+
+
+    const possibles = [ //array of all possible win options for each place
+    	[11, 15, 3], //ROW 0
+    	[11, 10, 15, 3],
+    	[11, 10, 9, 15, 3],
+    	[11, 10, 9, 8, 15, 3, 4],
+    	[8, 9, 10, 15, 4],
+    	[8, 9, 15, 4],
+    	[8, 15, 4],
+
+    	[11, 14, 15, 3], //ROW 1
+    	[11, 10, 14, 15, 3, 2],
+    	[11, 10, 9, 14, 15, 3, 2, 5],
+    	[11, 10, 9, 8, 14, 15, 3, 2, 5, 4],
+    	[8, 9, 10, 14, 15, 2, 5, 4],
+    	[8, 9, 14, 15, 5, 4],
+    	[8, 14, 15, 4],
+
+    	[11, 13, 14, 15, 3], //ROW 2
+    	[11, 10, 13, 14, 15, 3, 2, 6],
+    	[11, 10, 9, 13, 14, 15, 3, 2, 1, 6, 5],
+    	[11, 10, 9, 8, 13, 14, 15, 3, 2, 1, 6, 5, 4],
+    	[8, 9, 10, 13, 14, 15, 2, 1, 6, 5, 4],
+    	[8, 9, 13, 14, 15, 1, 5, 4],
+    	[8, 13, 14, 15, 4],
+
+    	[11, 12, 13, 14, 7], //ROW 3
+    	[11, 10, 12, 13, 14, 2, 7, 6],
+    	[11, 10, 9, 12, 13, 14, 2, 1, 7, 6, 5],
+    	[11, 10, 9, 8, 12, 13, 14, 2, 1, 0, 7, 6, 5],
+    	[8, 9, 10, 12, 13, 14, 2, 1, 0, 6, 5],
+    	[8, 9, 12, 13, 14, 1, 0, 5],
+    	[8, 12, 13, 14, 0],
+
+    	[11, 12, 13, 7], //ROW 4
+    	[11, 10, 12, 13, 7, 6],
+    	[11, 10, 9, 12, 13, 1, 7, 6],
+    	[11, 10, 9, 8, 12, 13, 1, 0, 7, 6],
+    	[8, 9, 10, 12, 13, 1, 0, 6],
+    	[8, 9, 12, 13, 1, 0],
+    	[8, 12, 13, 0],
+
+    	[11, 12, 7], //ROW 5
+    	[11, 10, 12, 7],
+    	[11, 10, 9, 12, 7],
+    	[11, 10, 9, 8, 12, 7, 0],
+    	[8, 9, 10, 12, 0],
+    	[8, 9, 12, 0],
+    	[8, 12, 0]
+    ];
+
+    const moves = [ //array of win types
+    	[0,0],[1,1],[2,2],[3,3],
+    	[0,0],[1,-1],[2,-2],[3,-3],
+    	[0,0],[1,0],[2,0],[3,0],
+    	[0,0],[0,1],[0,2],[0,3],
+
+    	[-1, -1], [-1, 1], [-1, 0], [0, -1] //directions, stored here for memory optimisation
+    ];
+
+
+
+function setupDraw(){
+  var centerX = (windowWidth - width) / 2;
+  var centerY = (windowHeight - height) / 2;
+  canvas.position(centerX, centerY);
+
+  if(height > width){
+    gameWidth = width;
+    gameHeight = width;
+    margin = 0;
+    topOffset = gameWidth/7 + height/2 - gameHeight/2;
+  } else {
+    gameWidth = height;
+    gameHeight = height;
+    margin = width - gameWidth;
+    topOffset = gameWidth/7;
+  }
+
+
+
+
+  R = gameWidth/boardWidth;
+}
+
+    function setup() {
+      canvas = createCanvas(window.innerWidth- padding, window.innerHeight - padding);
+
+
+
+    	red = color(255, 0, 0);
+    	yellow = color(255, 255, 0);
+    	redSoft = color(255, 0, 0, 50);
+    	yellowSoft = color(255, 255, 0, 50);
+    	noStroke();
+    	textAlign(CENTER, CENTER);
+    	textFont("Roboto");
+
+      setupDraw();
+      setupButtons();
+    	setupMenu();
+    }
+
+    function setupButtons(){
+
+      buttons[1] = new Button(width/2, gameHeight/2+topOffset-gameWidth/7-2.25*R, R*3, R, "Multiplayer", radioMulti);
+      buttons[2] = new Button(width/2, gameHeight/2+topOffset-gameWidth/7-0.75*R, R*3, R, "Play 1st vs AI", radioPVA);
+      buttons[3] = new Button(width/2, gameHeight/2+topOffset-gameWidth/7+0.75*R, R*3, R, "Play 2nd vs AI", radioAVP);
+      buttons[0] = new Button(width/2, gameHeight/2+topOffset-gameWidth/7+2.25*R, R*3, R, "Change AI Depth", newDepth);
+
+
+      buttons[2].selected = true;
+    }
+
+
+    window.ondeviceorientation = function(){
+      windowChanged();
+
+    };
+
+    window.onresize = function() {
+      windowChanged();
+    };
+
+    function windowChanged(){
+
+      var w = window.innerWidth-padding;
+      var h = window.innerHeight-padding;
+      canvas.size(w,h);
+      width = w;
+      height = h;
+
+      setupDraw();
+      setupButtons();
+    }
+    function draw() {
+
+    	if (playing || gameOver) {
+    		drawGame();
+    	} else {
+    		runMenu();
+    	}
+    	//draw overlay
+    }
+
+
+    function setupGame() {
+    	player = 1;
+    	playing = true;
+    	realBoard = new Array(boardWidth);   //-1 = y, 1 = r, 0 = empty
+    	for(let i = 0; i < boardWidth; i++){
+    		realBoard[i] = [0, 0, 0, 0, 0, 0];
+    	}
+
+    	if(humanPlayer == -1 && !multiplayer){
+    		makePlay();
+    	}
+    }
+
+
+    function drawGame() {
+
+    	background(60);
+      fill(100);
+      rect(width/2 - gameWidth/2, height/2 - gameHeight/2, gameWidth, gameHeight);
+
+    	for (let x = 0; x < boardWidth; x++) {
+    		var xPos = x * R + R/2 + margin/2;
+    		for (let y = 0; y < boardHeight; y++) {
+    			var yPos = y * R + R/2 + topOffset;
+
+    			if (realBoard[x][y] == -1) {
+    				fill(yellow);
+    			} else if (realBoard[x][y] == 1) {
+    				fill(red);
+    			} else {
+    				fill(255);
+    			}
+
+    			ellipse(xPos, yPos, R, R);
+    		}
+
+    		if(gameOver){
+    			fill(0);
+
+    			textSize(R/3);
+    			text("Game over, " + (winner==1?" Red":" Yellow") + " wins!", width/2, height/2);
+    			textSize(R/4);
+    			text("Tap anywhere to try again~", width/2, height/2+R);
+
+    		} else {
+    			fill(player==1?redSoft:yellowSoft);
+    			if (x == dropPos) {
+    				ellipse(xPos, -1 * R + R/2 + topOffset-4, R, R);
+    			}
+    	}
+    	}
+
+    	//map mouseX to the corresponding collumn
+    	dropPos = floor(constrain(map(constrain(mouseX, margin/2, width-margin/2), margin/2, width-margin/2, 0, boardWidth), 0, 6));
+
+
+    }
+
+
+
+    //MENU
+    function setupMenu() {
+    	//mode
+    	//start
+    	//difficulty
+
+    }
+
+    function radioMulti(){
+    	multiplayer = true;
+    	setupGame();
+    }
+
+    function radioPVA(){
+    	humanPlayer = 1;
+    	multiplayer = false;
+    	setupGame();
+    }
+
+    function radioAVP(){
+    	humanPlayer = -1;
+    	multiplayer = false;
+    	setupGame();
+    }
+
+    function radioClear(){
+    	buttons[1].selected = false;
+    	buttons[2].selected = false;
+    	buttons[3].selected = false;
+    }
+
+
+
+    function newDepth(){
+    	maxDepth = constrain(window.prompt("New depth (1-9)", "7"), 1, 9);
+
+    }
+
+    function toggleFullscreen(){
+    	let currentSetting = fullscreen();
+    	fullscreen(!currentSetting);
+    }
+
+    function runMenu() {
+      background(60);
+      fill(100);
+      rect(width/2 - gameWidth/2, height/2 - gameHeight/2, gameWidth, gameHeight);
+    	for(let b of buttons){
+    			b.runButton();
+    	}
+
+
+    	//ellipse() for red and yellow
+    	//click to toggle computer and human
+    	//plus minus for difficulty steps
+    }
+
+
+    function Button(x, y, w, h, title, clickEvent){
+    	this.x = x;
+    	this.y = y;
+    	this.w = w;
+    	this.h = h;
+    	this.title = title;
+    	this.clickEvent = clickEvent;
+    	this.hovered = false;
+
+    	this.runButton = function(){
+
+    		this.hovered = ((mouseX > (this.x-this.w/2) && mouseX <  (this.x-this.w/2)+this.w && mouseY >  (this.y-this.h/2) && mouseY <  (this.y-this.h/2)+this.h));
+    		fill(255);
+    		rect(x-w/2, y-h/2, w, h);
+    		fill(0);
+    		textSize(R/3);
+    		text(title, x, y);
+    	}
+
+    }
+
+    //EVENTS
+    function mouseReleased(){
+      clickTap();
+
+    }
+    function touchEnded(){
+      clickTap();
+
+    }
+
+    function mousePressed(){
+
+
+
+    }
+
+    function clickTap(){
+      if(lastClick + cooldown < millis())
+
+      {
+        lastClick = millis();
+
+
+        if(playing){
+          playerEvent();
+        } else {
+          if(gameOver){
+            gameOver = false;
+            setupMenu();
+          } else {
+            for(let b of buttons){
+
+            if(b.hovered){
+              b.clickEvent();
+            }
+          }
+          }
+        }
+
+
+      }
+
+    }
+
+    function keyPressed(){
+      if(keyCode == 27){
+        playing = false;
+        gameOver = false;
+        setupMenu();
+      }
+    }
+
+
+    //GAME AI
+    function playerEvent(){
+    	if (aiDone) {
+
+    		if(makePlay() == false){
+    			return;
+    		}
+    		if(!multiplayer && !gameOver){
+    			makePlay();
+    		}
+    	}
+
+    }
+
+    function copyBoard(board){
+
+    	newBoard = new Array(boardWidth);   //-1 = y, 1 = r, 0 = empty
+    	for(let i = 0; i < boardWidth; i++){
+    		newBoard[i] = board[i].slice();
+    	}
+
+    	return newBoard;
+    }
+
+    function makePlay(){
+    	if(multiplayer || humanPlayer == player){
+
+    		if (dropPiece(dropPos, player)) {
+    			player *= -1;
+    		} else {
+    			return false;
+    		}
+
+    	} else {
+
+    		aiDone = false;
+
+    		var fullRet = prune(copyBoard(realBoard), maxDepth, player, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, true);
+    		let loc = fullRet[1];
+
+    		if (dropPiece(loc, player)) {
+    			player *= -1;
+    		} else {
+
+    			print("ILLEGAL AI PLAY");
+    			for(let errorPlay = 0; errorPlay < boardWidth; errorPlay++){
+    				if (dropPiece(errorPlay, player)) {
+    					player *= -1;
+    					break;
+    				}
+    			}
+
+    		}
+
+    		aiDone = true;
+    	}
+    }
+
+
+    function dropPiece(pos, player) {
+
+    	if (realBoard[pos][0] != 0) {
+    		return false;
+    	} else {
+    		let j = 0;
+    		while (j < boardHeight-1 && realBoard[pos][j+1] == 0) {
+    			j++;
+    		}
+    		realBoard[pos][j] = player;
+
+    		if(checkWin(realBoard, [pos, j], player)){
+    			winner = player;
+    			gameOver = true;
+    			playing = false;
+    		}
+
+    		return true;
+    	}
+    }
+
+
+    function prune(board, depth, player, alpha, beta, maxer) {
+    	var ret = [0, 0]; //value and move //array2
+    	var leaf;
+    	var movePos = [0, 0]; //array2
+
+    	if (depth == 0) {
+    		return [evaluateState(board, player), 0];
+    	}
+
+    	if (maxer) { //maximising
+    		leaf = true;
+    		ret[0] = Number.NEGATIVE_INFINITY;
+
+    		let i;
+    		for (let j = 0; j < 7; j++) {
+    			i = 3 + floor(((j%2==0?1:-1) * ceil(j/2.0))); //check middle columns first (AB speedup)
+    			//todo: retest
+
+    			var nextState = makeMove(board, i, player, movePos); //record movePos for checking win
+    			//todo: check copying not referencing
+
+    			if (nextState != null) {
+    				leaf = false;
+    				var v = checkWin(nextState, movePos, player)?Number.POSITIVE_INFINITY:prune(nextState, depth - 1, player, alpha, beta, false)[0];
+
+    				if (v > ret[0]) {
+    					ret[0] = v;
+    					ret[1] = i;
+    				}
+    				alpha = Math.max(alpha, v);
+    				if (beta <= alpha) {
+    					break; //a/b prune
+    				}
+    			}
+    		}
+    		return leaf ? [0, 0] : ret;
+    	} else { //minimising
+    		leaf = true;
+    		ret[0] = Number.POSITIVE_INFINITY;
+
+    		let i;
+    		for (let j = 0; j < 7; j++) {
+
+    			i = 3 + floor(((j%2==0?1:-1) * ceil(j/2.0))); //check middle columns first (AB speedup)
+
+    			var nextState = makeMove(board, i, -1 * player, movePos);
+    			if (nextState != null) {
+    				leaf = false;
+    				var v = checkWin(nextState, movePos, -1 * player)?Number.NEGATIVE_INFINITY:prune(nextState, depth - 1, player, alpha, beta, true)[0];
+    				if (v < ret[0]) {
+    					ret[0] = v;
+    					ret[1] = i;
+    				}
+    				beta = Math.min(beta, v);
+    				if (beta <= alpha)	{
+
+    					break; //a/b prune
+    				}
+    			}
+    		}
+    		return leaf ? [0, 0] : ret;
+    	}
+    }
+
+    function makeMove(board, position, player, movePos) {
+    	if (board[position][0] != 0) { // check if move is possible
+    		return null;
+    	}
+
+    	var newBoard = copyBoard(board);
+
+    	let i = 0;
+    	while (i < 6 - 1 && newBoard[position][i + 1] == 0) { //find where piece would fall to
+    		i++;
+    	}
+
+    	newBoard[position][i] = player;
+    	movePos[0] = position;
+    	movePos[1] = i;
+    	return newBoard;
+    }
+
+    function evaluateState(board, player) { //points of current player minus other's
+    	return score(board, player) - score(board, -1 * player);
+    }
+
+
+    function score(board, player) { //heuristic function
+    	var score = 0;
+    	for(let x = 0; x < 7; x++){
+    		for(let y = 0; y < 6; y++){ //for each piece
+    			if(board[x][y] == player){
+    				var openCount = 0;
+    				var pieceCount = 0;
+    				var possibleMoves = possibles[x + y * 7];
+
+    				for(let i = 0; i < possibleMoves.length; i++){ //count all the possible win's available
+
+    				var currentX = x+moves[possibleMoves[i]][0];
+    				var currentY = y+moves[possibleMoves[i]][1];
+
+    				var vX = moves[16+floor(possibleMoves[i]/4)][0];
+    				var vY = moves[16+floor(possibleMoves[i]/4)][1];
+    				//todo: retest
+
+    				var open = true;
+    				var localCount = 0;
+
+    				for(let j = 0; j < 4; j++){
+    					if(board[currentX][currentY] == player*-1){
+    						open = false;
+    						break;
+    					} else if(board[currentX][currentY] != 0){
+    						localCount++;
+    					}
+
+    					currentX+=vX;
+    					currentY+=vY;
+    				}
+
+    				if(open){
+    					openCount++;
+    					pieceCount+=localCount;
+    				}
+    			}
+
+    			score += pieceCount * openCount; //Heuristic definition <---
+    		}
+    	}
+    }
+    return score;
+    }
+
+    function checkWin(board, movePos, player) { //utility function for checking endstate
+    	var possibleMoves = possibles[movePos[0] + movePos[1] * 7];
+    	for(let i = 0; i < possibleMoves.length; i++){ //win possibilities
+    		var four = true;
+    		var x = movePos[0]+moves[possibleMoves[i]][0]; //win starting position
+    		var y = movePos[1]+moves[possibleMoves[i]][1];
+
+    		var vX = moves[16+floor(possibleMoves[i]/4)][0]; //direction of win
+    		var vY = moves[16+floor(possibleMoves[i]/4)][1];
+    		for(let j = 0; j < 4; j++){
+    			if(board[x][y] != player){
+    				four = false;
+    				break;
+    			}
+    			x+=vX;
+    			y+=vY;
+    		}
+
+    		if(four){
+    			return true;
+    		}
+    	}
+    	return false;
+    }
+
+    </script>
+
+  </body>
+</html>
